@@ -4,14 +4,14 @@ A simple 30-minute Pomodoro timer for Windows. Flashes the taskbar icon and play
 
 ## Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0), or install via Visual Studio:
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), or install via Visual Studio:
 
 When installing or modifying Visual Studio:
 
 1. Open the **Visual Studio Installer**
 2. Click **Modify** on your installation
 3. Under the **Workloads** tab, check **.NET desktop development**
-4. In the **Installation details** panel on the right, ensure **.NET 9.0 Runtime** is checked
+4. In the **Installation details** panel on the right, ensure **.NET 10.0 Runtime** is checked
 5. Click **Modify** to apply
 
 ## Build
@@ -34,4 +34,4 @@ To produce a single standalone `.exe` with no dependencies:
 dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
-The output will be in `bin/Release/net9.0-windows/win-x64/publish/WindowsPomodoro.exe`.
+The output will be in `bin/Release/net10.0-windows/win-x64/publish/WindowsPomodoro.exe`.

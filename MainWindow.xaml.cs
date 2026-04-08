@@ -1,7 +1,10 @@
+using System.Globalization;
 using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace WindowsPomodoro;
@@ -53,6 +56,47 @@ public partial class MainWindow : Window
     {
         TimerDisplay.Text = _timeRemaining.ToString(@"mm\:ss");
         Title = $"{_timeRemaining:mm\\:ss} - Pomodoro";
+        UpdateTaskbarOverlay();
+    }
+
+    private void UpdateTaskbarOverlay()
+    {
+        if (TaskbarItemInfo == null) return;
+
+        if (!_isRunning)
+        {
+            TaskbarItemInfo.Overlay = null;
+            return;
+        }
+
+        var minutes = (int)Math.Ceiling(_timeRemaining.TotalMinutes);
+        var text = minutes.ToString();
+
+        const int size = 20;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var drawingVisual = new DrawingVisual();
+        using (var dc = drawingVisual.RenderOpen())
+        {
+            dc.DrawEllipse(Brushes.OrangeRed, null, new Point(size / 2.0, size / 2.0), size / 2.0, size / 2.0);
+
+            var formattedText = new FormattedText(
+                text,
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+                minutes >= 10 ? 11 : 14,
+                Brushes.White,
+                dpi.PixelsPerDip);
+
+            formattedText.TextAlignment = TextAlignment.Center;
+            dc.DrawText(formattedText, new Point(size / 2.0, (size - formattedText.Height) / 2.0));
+        }
+
+        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawingVisual);
+        bitmap.Freeze();
+
+        TaskbarItemInfo.Overlay = bitmap;
     }
 
     private void StartPauseButton_Click(object sender, RoutedEventArgs e)
@@ -62,12 +106,14 @@ public partial class MainWindow : Window
             _timer.Stop();
             _isRunning = false;
             StartPauseButton.Content = "Start";
+            UpdateTaskbarOverlay();
         }
         else
         {
             _timer.Start();
             _isRunning = true;
             StartPauseButton.Content = "Pause";
+            UpdateTaskbarOverlay();
         }
     }
 

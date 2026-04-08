@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "Task",
+      "mcp__*",
+      "Skill",
+      "WebFetch"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~/*)",
+      "Bash(chmod 777 *)",
+      "Read(~/.ssh/*)",
+      "Read(~/.gnupg/*)",
+      "Read(~/.aws/*)",
+      "Read(~/.config/gcloud/*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/secrets/*)",
+      "Read(**/*credential*)",
+      "Read(**/*password*)",
+      "Edit(~/.ssh/*)",
+      "Edit(~/.gnupg/*)",
+      "Edit(~/.aws/*)",
+      "Write(~/.ssh/*)",
+      "Write(~/.gnupg/*)",
+      "Write(~/.aws/*)"
+    ],
+    "ask": [
+      "Bash(pip3 install *)",
+      "Bash(git push origin --delete *)",
+      "Bash(git push -f*)",
+      "Bash(git push --force*)",
+      "Bash(*Stop-Process*)"
+    ]
+  }
+}

@@ -10,7 +10,7 @@
       "WebSearch",
       "Task",
       "mcp__*",
-      "Skill",
+      "Skill"
     ],
     "deny": [
       "Bash(sudo *)",

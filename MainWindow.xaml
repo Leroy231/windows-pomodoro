@@ -30,7 +30,12 @@
                     Click="ResetButton_Click"/>
         </StackPanel>
 
-        <!-- Custom duration & Debug -->
+        <!-- Bottom row -->
+        <CheckBox x:Name="AutoStartCheckBox" Content="Start with Windows"
+                  Grid.Row="2" HorizontalAlignment="Left"
+                  VerticalAlignment="Center" FontSize="11" Foreground="Gray"
+                  Checked="AutoStartCheckBox_Changed"
+                  Unchecked="AutoStartCheckBox_Changed"/>
         <StackPanel Grid.Row="2" Orientation="Horizontal"
                     HorizontalAlignment="Right">
             <TextBox x:Name="CustomMinutesBox" Width="40" Height="24"

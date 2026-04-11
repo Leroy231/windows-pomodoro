@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Toolkit.Uwp.Notifications;
+using Microsoft.Win32;
 
 namespace WindowsPomodoro;
 
@@ -18,12 +19,16 @@ public partial class MainWindow : Window
     private TimeSpan _timeRemaining;
     private bool _isRunning;
 
+    private const string RegistryKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+    private const string RegistryValueName = "WindowsPomodoro";
+
     public MainWindow()
     {
         InitializeComponent();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += Timer_Tick;
         ResetTimer();
+        AutoStartCheckBox.IsChecked = IsAutoStartEnabled();
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -159,6 +164,30 @@ public partial class MainWindow : Window
             StartPauseButton.Content = "Pause";
         }
     }
+
+    #region Auto-Start
+
+    private static bool IsAutoStartEnabled()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, false);
+        return key?.GetValue(RegistryValueName) != null;
+    }
+
+    private void AutoStartCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        var exePath = Environment.ProcessPath;
+        if (exePath == null) return;
+
+        using var key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, true);
+        if (key == null) return;
+
+        if (AutoStartCheckBox.IsChecked == true)
+            key.SetValue(RegistryValueName, $"\"{exePath}\"");
+        else
+            key.DeleteValue(RegistryValueName, false);
+    }
+
+    #endregion
 
     #region Taskbar Flash
 

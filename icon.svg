@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Tomato body -->
+  <ellipse cx="256" cy="288" rx="200" ry="190" fill="#E74C3C"/>
+  <!-- Tomato highlight -->
+  <ellipse cx="200" cy="240" rx="80" ry="100" fill="#EC7063" opacity="0.5"/>
+  <!-- Stem -->
+  <rect x="244" y="88" width="24" height="40" rx="6" fill="#6B8E23"/>
+  <!-- Leaf left -->
+  <path d="M256 108 Q200 60 180 90 Q190 120 256 108Z" fill="#27AE60"/>
+  <!-- Leaf right -->
+  <path d="M256 108 Q312 60 332 90 Q322 120 256 108Z" fill="#2ECC71"/>
+  <!-- Clock face -->
+  <circle cx="256" cy="296" r="110" fill="white" opacity="0.92"/>
+  <!-- Clock border -->
+  <circle cx="256" cy="296" r="110" fill="none" stroke="#C0392B" stroke-width="8"/>
+  <!-- Hour marks -->
+  <line x1="256" y1="196" x2="256" y2="212" stroke="#333" stroke-width="6" stroke-linecap="round"/>
+  <line x1="256" y1="380" x2="256" y2="396" stroke="#333" stroke-width="6" stroke-linecap="round"/>
+  <line x1="156" y1="296" x2="172" y2="296" stroke="#333" stroke-width="6" stroke-linecap="round"/>
+  <line x1="340" y1="296" x2="356" y2="296" stroke="#333" stroke-width="6" stroke-linecap="round"/>
+  <!-- Minute hand (pointing to 6 - representing 30 min) -->
+  <line x1="256" y1="296" x2="256" y2="376" stroke="#333" stroke-width="7" stroke-linecap="round"/>
+  <!-- Hour hand -->
+  <line x1="256" y1="296" x2="310" y2="260" stroke="#333" stroke-width="9" stroke-linecap="round"/>
+  <!-- Center dot -->
+  <circle cx="256" cy="296" r="8" fill="#C0392B"/>
+</svg>

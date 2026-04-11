@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace WindowsPomodoro;
 
@@ -43,7 +44,16 @@ public partial class MainWindow : Window
     {
         SystemSounds.Beep.Play();
         FlashTaskbar();
+        ShowToastNotification();
         ResetTimer();
+    }
+
+    private static void ShowToastNotification()
+    {
+        new ToastContentBuilder()
+            .AddText("Pomodoro Complete!")
+            .AddText("Time for a break. Your 30-minute session has ended.")
+            .Show();
     }
 
     private void ResetTimer()

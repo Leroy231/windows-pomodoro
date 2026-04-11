@@ -30,10 +30,19 @@
                     Click="ResetButton_Click"/>
         </StackPanel>
 
-        <!-- Debug -->
-        <Button x:Name="DebugButton" Content="Set 5s" Grid.Row="2"
-                HorizontalAlignment="Right"
-                Width="60" Height="24" FontSize="11" Foreground="Gray"
-                Click="DebugButton_Click"/>
+        <!-- Custom duration & Debug -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <TextBox x:Name="CustomMinutesBox" Width="40" Height="24"
+                     FontSize="11" VerticalContentAlignment="Center"
+                     Margin="0,0,4,0" MaxLength="3"/>
+            <Button Content="Set min" Height="24" FontSize="11"
+                    Foreground="Gray" Padding="4,0"
+                    Click="SetCustomMinutes_Click"/>
+            <Button x:Name="DebugButton" Content="Set 5s"
+                    Margin="8,0,0,0"
+                    Width="60" Height="24" FontSize="11" Foreground="Gray"
+                    Click="DebugButton_Click"/>
+        </StackPanel>
     </Grid>
 </Window>

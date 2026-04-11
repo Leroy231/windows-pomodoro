@@ -135,6 +135,19 @@ public partial class MainWindow : Window
         ResetTimer();
     }
 
+    private void SetCustomMinutes_Click(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(CustomMinutesBox.Text, out var minutes) && minutes > 0)
+        {
+            _timer.Stop();
+            _isRunning = false;
+            _timeRemaining = TimeSpan.FromMinutes(minutes);
+            UpdateDisplay();
+            StartPauseButton.Content = "Start";
+            CustomMinutesBox.Clear();
+        }
+    }
+
     private void DebugButton_Click(object sender, RoutedEventArgs e)
     {
         _timeRemaining = TimeSpan.FromSeconds(5);

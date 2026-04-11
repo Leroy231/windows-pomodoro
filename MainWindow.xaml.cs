@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 using System.Windows.Threading;
 using Microsoft.Toolkit.Uwp.Notifications;
 using Microsoft.Win32;
@@ -185,6 +186,16 @@ public partial class MainWindow : Window
             key.SetValue(RegistryValueName, $"\"{exePath}\"");
         else
             key.DeleteValue(RegistryValueName, false);
+    }
+
+    private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = e.Uri.AbsoluteUri,
+            UseShellExecute = true
+        });
+        e.Handled = true;
     }
 
     #endregion

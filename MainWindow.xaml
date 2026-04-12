@@ -5,7 +5,16 @@
         Icon="icon.ico"
         ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen">
     <Window.TaskbarItemInfo>
-        <TaskbarItemInfo/>
+        <TaskbarItemInfo>
+            <TaskbarItemInfo.ThumbButtonInfos>
+                <ThumbButtonInfo x:Name="StartPauseThumbButton"
+                                 Description="Start"
+                                 Click="StartPauseThumbButton_Click"/>
+                <ThumbButtonInfo x:Name="ResetThumbButton"
+                                 Description="Reset"
+                                 Click="ResetThumbButton_Click"/>
+            </TaskbarItemInfo.ThumbButtonInfos>
+        </TaskbarItemInfo>
     </Window.TaskbarItemInfo>
     <Grid Margin="20">
         <Grid.RowDefinitions>

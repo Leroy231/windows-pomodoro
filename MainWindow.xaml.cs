@@ -30,6 +30,65 @@ public partial class MainWindow : Window
         _timer.Tick += Timer_Tick;
         ResetTimer();
         AutoStartCheckBox.IsChecked = IsAutoStartEnabled();
+        StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+        ResetThumbButton.ImageSource = CreateGlyphIcon("\uE72C");
+    }
+
+    private static ImageSource CreateGlyphIcon(string glyph)
+    {
+        const int size = 16;
+        var drawingVisual = new DrawingVisual();
+        using (var dc = drawingVisual.RenderOpen())
+        {
+            var formattedText = new FormattedText(
+                glyph,
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(new FontFamily("Segoe MDL2 Assets"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+                12,
+                Brushes.White,
+                1.0);
+            formattedText.TextAlignment = TextAlignment.Center;
+            dc.DrawText(formattedText, new Point(size / 2.0, (size - formattedText.Height) / 2.0));
+        }
+        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawingVisual);
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    private void StartPauseThumbButton_Click(object? sender, EventArgs e) => TogglePlayPause();
+    private void ResetThumbButton_Click(object? sender, EventArgs e) => DoReset();
+
+    private void TogglePlayPause()
+    {
+        if (_isRunning)
+        {
+            _timer.Stop();
+            _isRunning = false;
+            StartPauseButton.Content = "Start";
+            StartPauseThumbButton.Description = "Start";
+            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+        }
+        else
+        {
+            _timer.Start();
+            _isRunning = true;
+            StartPauseButton.Content = "Pause";
+            StartPauseThumbButton.Description = "Pause";
+            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE769");
+        }
+        UpdateTaskbarOverlay();
+    }
+
+    private void DoReset()
+    {
+        _timer.Stop();
+        _isRunning = false;
+        StartPauseButton.Content = "Start";
+        StartPauseThumbButton.Description = "Start";
+        StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+        ResetTimer();
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -42,6 +101,8 @@ public partial class MainWindow : Window
             _timer.Stop();
             _isRunning = false;
             StartPauseButton.Content = "Start";
+            StartPauseThumbButton.Description = "Start";
+            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
             OnTimerComplete();
         }
     }
@@ -115,31 +176,9 @@ public partial class MainWindow : Window
         TaskbarItemInfo.Overlay = bitmap;
     }
 
-    private void StartPauseButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_isRunning)
-        {
-            _timer.Stop();
-            _isRunning = false;
-            StartPauseButton.Content = "Start";
-            UpdateTaskbarOverlay();
-        }
-        else
-        {
-            _timer.Start();
-            _isRunning = true;
-            StartPauseButton.Content = "Pause";
-            UpdateTaskbarOverlay();
-        }
-    }
+    private void StartPauseButton_Click(object sender, RoutedEventArgs e) => TogglePlayPause();
 
-    private void ResetButton_Click(object sender, RoutedEventArgs e)
-    {
-        _timer.Stop();
-        _isRunning = false;
-        StartPauseButton.Content = "Start";
-        ResetTimer();
-    }
+    private void ResetButton_Click(object sender, RoutedEventArgs e) => DoReset();
 
     private void SetCustomMinutes_Click(object sender, RoutedEventArgs e)
     {
@@ -150,6 +189,8 @@ public partial class MainWindow : Window
             _timeRemaining = TimeSpan.FromMinutes(minutes);
             UpdateDisplay();
             StartPauseButton.Content = "Start";
+            StartPauseThumbButton.Description = "Start";
+            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
             CustomMinutesBox.Clear();
         }
     }
@@ -158,12 +199,7 @@ public partial class MainWindow : Window
     {
         _timeRemaining = TimeSpan.FromSeconds(5);
         UpdateDisplay();
-        if (!_isRunning)
-        {
-            _timer.Start();
-            _isRunning = true;
-            StartPauseButton.Content = "Pause";
-        }
+        if (!_isRunning) TogglePlayPause();
     }
 
     #region Auto-Start

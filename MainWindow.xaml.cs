@@ -62,6 +62,7 @@ public partial class MainWindow : Window
 
     private void TogglePlayPause()
     {
+        StopFlashTaskbar();
         if (_isRunning)
         {
             _timer.Stop();
@@ -83,6 +84,7 @@ public partial class MainWindow : Window
 
     private void DoReset()
     {
+        StopFlashTaskbar();
         _timer.Stop();
         _isRunning = false;
         StartPauseButton.Content = "Start";
@@ -248,6 +250,7 @@ public partial class MainWindow : Window
         public uint dwTimeout;
     }
 
+    private const uint FLASHW_STOP = 0;
     private const uint FLASHW_ALL = 3;
     private const uint FLASHW_TIMERNOFG = 12;
 
@@ -266,6 +269,22 @@ public partial class MainWindow : Window
             hwnd = hwnd,
             dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG,
             uCount = uint.MaxValue,
+            dwTimeout = 0
+        };
+        FlashWindowEx(ref info);
+    }
+
+    private void StopFlashTaskbar()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+
+        var info = new FLASHWINFO
+        {
+            cbSize = (uint)Marshal.SizeOf<FLASHWINFO>(),
+            hwnd = hwnd,
+            dwFlags = FLASHW_STOP,
+            uCount = 0,
             dwTimeout = 0
         };
         FlashWindowEx(ref info);

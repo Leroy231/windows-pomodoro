@@ -34,4 +34,4 @@ To produce a single standalone `.exe` with no dependencies:
 dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
-The output will be in `bin/Release/net10.0-windows/win-x64/publish/WindowsPomodoro.exe`.
+The output will be in `bin/Release/net10.0-windows10.0.17763.0/win-x64/publish/WindowsPomodoro.exe`.

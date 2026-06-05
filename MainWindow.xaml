@@ -1,7 +1,7 @@
 <Window x:Class="WindowsPomodoro.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Pomodoro Timer" Height="300" Width="400"
+        Title="Pomodoro Timer" Height="330" Width="400"
         Icon="icon.ico"
         ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen">
     <Window.TaskbarItemInfo>
@@ -47,18 +47,36 @@
                   VerticalAlignment="Center" FontSize="11" Foreground="Gray"
                   Checked="AutoStartCheckBox_Changed"
                   Unchecked="AutoStartCheckBox_Changed"/>
-        <StackPanel Grid.Row="2" Orientation="Horizontal"
+        <StackPanel Grid.Row="2" Orientation="Vertical"
                     HorizontalAlignment="Right">
-            <TextBox x:Name="CustomMinutesBox" Width="40" Height="24"
-                     FontSize="11" VerticalContentAlignment="Center"
-                     Margin="0,0,4,0" MaxLength="3"/>
-            <Button Content="Set min" Height="24" FontSize="11"
-                    Foreground="Gray" Padding="4,0"
-                    Click="SetCustomMinutes_Click"/>
-            <Button x:Name="DebugButton" Content="Set 5s"
-                    Margin="8,0,0,0"
-                    Width="60" Height="24" FontSize="11" Foreground="Gray"
-                    Click="DebugButton_Click"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        Margin="0,0,0,4">
+                <TextBox x:Name="CustomMinutesBox" Width="40" Height="24"
+                         FontSize="11" VerticalContentAlignment="Center"
+                         Margin="0,0,4,0" MaxLength="3"/>
+                <Button Content="Set min" Height="24" FontSize="11"
+                        Foreground="Gray" Padding="4,0"
+                        Click="SetCustomMinutes_Click"/>
+                <Button x:Name="DebugButton" Content="Set 5s"
+                        Margin="8,0,0,0"
+                        Width="60" Height="24" FontSize="11" Foreground="Gray"
+                        Click="DebugButton_Click"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <TextBlock Text="Break" FontSize="11" Foreground="Gray"
+                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <TextBox x:Name="BreakSecondsBox" Width="48" Height="24"
+                         FontSize="11" VerticalContentAlignment="Center"
+                         Margin="0,0,4,0" MaxLength="5"/>
+                <TextBlock Text="sec" FontSize="11" Foreground="Gray"
+                           VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <Button Content="Save" Height="24" FontSize="11"
+                        Foreground="Gray" Padding="4,0"
+                        Click="SaveBreakSeconds_Click"/>
+            </StackPanel>
+            <TextBlock x:Name="BreakSecondsError" FontSize="10"
+                       Foreground="Firebrick" HorizontalAlignment="Right"
+                       Margin="0,2,0,0"/>
         </StackPanel>
         <!-- Attribution -->
         <TextBlock Grid.Row="3" HorizontalAlignment="Center" FontSize="9"

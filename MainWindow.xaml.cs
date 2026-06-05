@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.IO;
 using System.Media;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -15,17 +17,28 @@ namespace WindowsPomodoro;
 public partial class MainWindow : Window
 {
     private const int TimerMinutes = 30;
+    private const int DefaultBreakSeconds = 10;
 
     private readonly DispatcherTimer _timer;
+    private readonly AppSettings _settings;
     private TimeSpan _timeRemaining;
     private bool _isRunning;
+    private TimerPhase _phase = TimerPhase.Pomodoro;
 
     private const string RegistryKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string RegistryValueName = "WindowsPomodoro";
+    private static readonly string SettingsDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "WindowsPomodoro");
+    private static readonly string SettingsFilePath = Path.Combine(SettingsDirectory, "settings.json");
+    private static readonly Brush PomodoroBackground = Brushes.White;
+    private static readonly Brush BreakBackground = new SolidColorBrush(Color.FromRgb(232, 245, 233));
 
     public MainWindow()
     {
         InitializeComponent();
+        _settings = LoadSettings();
+        BreakSecondsBox.Text = _settings.BreakSeconds.ToString(CultureInfo.InvariantCulture);
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += Timer_Tick;
         ResetTimer();
@@ -67,17 +80,13 @@ public partial class MainWindow : Window
         {
             _timer.Stop();
             _isRunning = false;
-            StartPauseButton.Content = "Start";
-            StartPauseThumbButton.Description = "Start";
-            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+            SetStartButtonState();
         }
         else
         {
             _timer.Start();
             _isRunning = true;
-            StartPauseButton.Content = "Pause";
-            StartPauseThumbButton.Description = "Pause";
-            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE769");
+            SetPauseButtonState();
         }
         UpdateTaskbarOverlay();
     }
@@ -87,55 +96,105 @@ public partial class MainWindow : Window
         StopFlashTaskbar();
         _timer.Stop();
         _isRunning = false;
-        StartPauseButton.Content = "Start";
-        StartPauseThumbButton.Description = "Start";
-        StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+        SetStartButtonState();
         ResetTimer();
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
         _timeRemaining -= TimeSpan.FromSeconds(1);
-        UpdateDisplay();
 
         if (_timeRemaining <= TimeSpan.Zero)
         {
+            _timeRemaining = TimeSpan.Zero;
+            UpdateDisplay();
             _timer.Stop();
             _isRunning = false;
-            StartPauseButton.Content = "Start";
-            StartPauseThumbButton.Description = "Start";
-            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+            SetStartButtonState();
             OnTimerComplete();
+            return;
         }
+
+        UpdateDisplay();
     }
 
     private void OnTimerComplete()
     {
+        var completedPhase = _phase;
         SystemSounds.Beep.Play();
         FlashTaskbar();
-        ShowToastNotification();
-        ResetTimer();
+        ShowToastNotification(completedPhase);
+
+        if (completedPhase == TimerPhase.Pomodoro)
+            SetBreakReady();
+        else
+            SetPomodoroReady();
     }
 
-    private static void ShowToastNotification()
+    private static void ShowToastNotification(TimerPhase completedPhase)
     {
-        new ToastContentBuilder()
-            .AddText("Pomodoro Complete!")
-            .AddText("Time for a break. Your 30-minute session has ended.")
-            .Show();
+        var toast = new ToastContentBuilder();
+        if (completedPhase == TimerPhase.Pomodoro)
+        {
+            toast
+                .AddText("Pomodoro Complete!")
+                .AddText($"Time for a break. Your {TimerMinutes}-minute session has ended.");
+        }
+        else
+        {
+            toast
+                .AddText("Break Complete!")
+                .AddText("Ready for the next pomodoro.");
+        }
+
+        toast.Show();
     }
 
     private void ResetTimer()
     {
+        SetPomodoroReady();
+    }
+
+    private void SetPomodoroReady()
+    {
         _timeRemaining = TimeSpan.FromMinutes(TimerMinutes);
+        _phase = TimerPhase.Pomodoro;
+        UpdateDisplay();
+    }
+
+    private void SetBreakReady()
+    {
+        _timeRemaining = TimeSpan.FromSeconds(_settings.BreakSeconds);
+        _phase = TimerPhase.Break;
         UpdateDisplay();
     }
 
     private void UpdateDisplay()
     {
-        TimerDisplay.Text = _timeRemaining.ToString(@"mm\:ss");
-        Title = $"{_timeRemaining:mm\\:ss} - Pomodoro";
+        var displayTime = FormatTimeRemaining(_timeRemaining);
+        TimerDisplay.Text = displayTime;
+        Title = $"{displayTime} - {GetPhaseTitle()}";
+        Background = _phase == TimerPhase.Break ? BreakBackground : PomodoroBackground;
         UpdateTaskbarOverlay();
+    }
+
+    private string GetPhaseTitle() => _phase == TimerPhase.Break ? "Break" : "Pomodoro";
+
+    private static string FormatTimeRemaining(TimeSpan time) =>
+        time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"mm\:ss");
+
+    private void SetStartButtonState()
+    {
+        StartPauseButton.Content = "Start";
+        StartPauseThumbButton.Description = "Start";
+        StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+    }
+
+    private void SetPauseButtonState()
+    {
+        StartPauseButton.Content = "Pause";
+        StartPauseThumbButton.Description = "Pause";
+        StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE769");
     }
 
     private void UpdateTaskbarOverlay()
@@ -148,22 +207,24 @@ public partial class MainWindow : Window
             return;
         }
 
-        var minutes = (int)Math.Ceiling(_timeRemaining.TotalMinutes);
-        var text = minutes.ToString();
+        var text = _timeRemaining.TotalMinutes >= 1
+            ? Math.Ceiling(_timeRemaining.TotalMinutes).ToString(CultureInfo.InvariantCulture)
+            : Math.Ceiling(_timeRemaining.TotalSeconds).ToString(CultureInfo.InvariantCulture);
 
         const int size = 20;
         var dpi = VisualTreeHelper.GetDpi(this);
         var drawingVisual = new DrawingVisual();
         using (var dc = drawingVisual.RenderOpen())
         {
-            dc.DrawEllipse(Brushes.OrangeRed, null, new Point(size / 2.0, size / 2.0), size / 2.0, size / 2.0);
+            var overlayBrush = _phase == TimerPhase.Break ? Brushes.DodgerBlue : Brushes.OrangeRed;
+            dc.DrawEllipse(overlayBrush, null, new Point(size / 2.0, size / 2.0), size / 2.0, size / 2.0);
 
             var formattedText = new FormattedText(
                 text,
                 CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
-                minutes >= 10 ? 11 : 14,
+                text.Length >= 3 ? 9 : text.Length == 2 ? 11 : 14,
                 Brushes.White,
                 dpi.PixelsPerDip);
 
@@ -189,12 +250,39 @@ public partial class MainWindow : Window
             _timer.Stop();
             _isRunning = false;
             _timeRemaining = TimeSpan.FromMinutes(minutes);
+            _phase = TimerPhase.Pomodoro;
             UpdateDisplay();
-            StartPauseButton.Content = "Start";
-            StartPauseThumbButton.Description = "Start";
-            StartPauseThumbButton.ImageSource = CreateGlyphIcon("\uE768");
+            SetStartButtonState();
             CustomMinutesBox.Clear();
         }
+    }
+
+    private void SaveBreakSeconds_Click(object sender, RoutedEventArgs e)
+    {
+        BreakSecondsError.Text = string.Empty;
+
+        if (!int.TryParse(BreakSecondsBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) ||
+            seconds <= 0)
+        {
+            BreakSecondsError.Text = "Enter positive seconds.";
+            return;
+        }
+
+        _settings.BreakSeconds = seconds;
+        BreakSecondsBox.Text = seconds.ToString(CultureInfo.InvariantCulture);
+
+        try
+        {
+            SaveSettings(_settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            BreakSecondsError.Text = "Could not save setting.";
+            return;
+        }
+
+        if (_phase == TimerPhase.Break && !_isRunning)
+            SetBreakReady();
     }
 
     private void DebugButton_Click(object sender, RoutedEventArgs e)
@@ -234,6 +322,46 @@ public partial class MainWindow : Window
             UseShellExecute = true
         });
         e.Handled = true;
+    }
+
+    #endregion
+
+    #region Settings
+
+    private sealed class AppSettings
+    {
+        public int BreakSeconds { get; set; } = DefaultBreakSeconds;
+    }
+
+    private enum TimerPhase
+    {
+        Pomodoro,
+        Break
+    }
+
+    private static AppSettings LoadSettings()
+    {
+        try
+        {
+            if (!File.Exists(SettingsFilePath))
+                return new AppSettings();
+
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsFilePath));
+            return settings?.BreakSeconds > 0 ? settings : new AppSettings();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return new AppSettings();
+        }
+    }
+
+    private static void SaveSettings(AppSettings settings)
+    {
+        Directory.CreateDirectory(SettingsDirectory);
+        File.WriteAllText(SettingsFilePath, JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        }));
     }
 
     #endregion

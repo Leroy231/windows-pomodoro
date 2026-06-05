@@ -4,6 +4,7 @@ using System.Media;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -18,12 +19,14 @@ public partial class MainWindow : Window
 {
     private const int TimerMinutes = 30;
     private const int DefaultBreakSeconds = 10;
+    private static readonly int[] DefaultFrequentPomodoroMinutes = [20, 45, 60];
 
     private readonly DispatcherTimer _timer;
     private readonly AppSettings _settings;
     private TimeSpan _timeRemaining;
     private bool _isRunning;
     private TimerPhase _phase = TimerPhase.Pomodoro;
+    private int _currentPomodoroMinutes = TimerMinutes;
 
     private const string RegistryKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string RegistryValueName = "WindowsPomodoro";
@@ -39,6 +42,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _settings = LoadSettings();
         BreakSecondsBox.Text = _settings.BreakSeconds.ToString(CultureInfo.InvariantCulture);
+        RenderFrequentTimes();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += Timer_Tick;
         ResetTimer();
@@ -123,7 +127,7 @@ public partial class MainWindow : Window
         var completedPhase = _phase;
         SystemSounds.Beep.Play();
         FlashTaskbar();
-        ShowToastNotification(completedPhase);
+        ShowToastNotification(completedPhase, _currentPomodoroMinutes);
 
         if (completedPhase == TimerPhase.Pomodoro)
             SetBreakReady();
@@ -131,14 +135,14 @@ public partial class MainWindow : Window
             SetPomodoroReady();
     }
 
-    private static void ShowToastNotification(TimerPhase completedPhase)
+    private static void ShowToastNotification(TimerPhase completedPhase, int completedPomodoroMinutes)
     {
         var toast = new ToastContentBuilder();
         if (completedPhase == TimerPhase.Pomodoro)
         {
             toast
                 .AddText("Pomodoro Complete!")
-                .AddText($"Time for a break. Your {TimerMinutes}-minute session has ended.");
+                .AddText($"Time for a break. Your {completedPomodoroMinutes}-minute session has ended.");
         }
         else
         {
@@ -157,9 +161,26 @@ public partial class MainWindow : Window
 
     private void SetPomodoroReady()
     {
-        _timeRemaining = TimeSpan.FromMinutes(TimerMinutes);
+        SetPomodoroMinutes(TimerMinutes, false);
+    }
+
+    private void SetPomodoroMinutes(int minutes, bool startImmediately)
+    {
+        _timer.Stop();
+        _isRunning = false;
+        _currentPomodoroMinutes = minutes;
+        _timeRemaining = TimeSpan.FromMinutes(minutes);
         _phase = TimerPhase.Pomodoro;
         UpdateDisplay();
+        SetStartButtonState();
+
+        if (!startImmediately)
+            return;
+
+        _timer.Start();
+        _isRunning = true;
+        SetPauseButtonState();
+        UpdateTaskbarOverlay();
     }
 
     private void SetBreakReady()
@@ -245,16 +266,169 @@ public partial class MainWindow : Window
 
     private void SetCustomMinutes_Click(object sender, RoutedEventArgs e)
     {
-        if (int.TryParse(CustomMinutesBox.Text, out var minutes) && minutes > 0)
+        if (int.TryParse(CustomMinutesBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) &&
+            IsValidPomodoroMinutes(minutes))
         {
-            _timer.Stop();
-            _isRunning = false;
-            _timeRemaining = TimeSpan.FromMinutes(minutes);
-            _phase = TimerPhase.Pomodoro;
-            UpdateDisplay();
-            SetStartButtonState();
+            StopFlashTaskbar();
+            SetPomodoroMinutes(minutes, false);
             CustomMinutesBox.Clear();
         }
+    }
+
+    private void FrequentMinutesButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: int minutes })
+        {
+            StopFlashTaskbar();
+            SetPomodoroMinutes(minutes, true);
+        }
+    }
+
+    private void ManageFrequentTimesButton_Click(object sender, RoutedEventArgs e)
+    {
+        FrequentTimesError.Text = string.Empty;
+        var isOpening = FrequentTimesEditor.Visibility != Visibility.Visible;
+        FrequentTimesEditor.Visibility = isOpening ? Visibility.Visible : Visibility.Collapsed;
+        ManageFrequentTimesButton.Content = isOpening ? "-" : "+";
+    }
+
+    private void AddFrequentMinutes_Click(object sender, RoutedEventArgs e)
+    {
+        FrequentTimesError.Text = string.Empty;
+
+        if (!int.TryParse(FrequentMinutesBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) ||
+            !IsValidPomodoroMinutes(minutes))
+        {
+            FrequentTimesError.Text = "Enter 1-999 minutes.";
+            return;
+        }
+
+        if (_settings.FrequentPomodoroMinutes.Contains(minutes))
+        {
+            FrequentTimesError.Text = "That time is already listed.";
+            return;
+        }
+
+        _settings.FrequentPomodoroMinutes.Add(minutes);
+        if (!TrySaveFrequentTimes())
+            return;
+
+        FrequentMinutesBox.Clear();
+        RenderFrequentTimes();
+    }
+
+    private void RemoveFrequentMinutes_Click(object sender, RoutedEventArgs e)
+    {
+        FrequentTimesError.Text = string.Empty;
+
+        if (sender is not Button { Tag: int minutes })
+            return;
+
+        _settings.FrequentPomodoroMinutes.Remove(minutes);
+        if (!TrySaveFrequentTimes())
+            return;
+
+        RenderFrequentTimes();
+    }
+
+    private void RenderFrequentTimes()
+    {
+        FrequentTimesPanel.Children.Clear();
+
+        foreach (var minutes in _settings.FrequentPomodoroMinutes)
+        {
+            var button = new Button
+            {
+                Content = FormatMinutesLabel(minutes),
+                Tag = minutes,
+                MinWidth = 44,
+                Height = 28,
+                Margin = new Thickness(4, 5, 0, 5),
+                Padding = new Thickness(8, 0, 8, 0),
+                FontSize = 12,
+                ToolTip = $"Start {FormatMinutesLabel(minutes)} pomodoro"
+            };
+            button.Click += FrequentMinutesButton_Click;
+            FrequentTimesPanel.Children.Add(button);
+        }
+
+        RenderFrequentTimesList();
+    }
+
+    private void RenderFrequentTimesList()
+    {
+        FrequentTimesListPanel.Children.Clear();
+
+        if (_settings.FrequentPomodoroMinutes.Count == 0)
+        {
+            FrequentTimesListPanel.Children.Add(new TextBlock
+            {
+                Text = "No frequent times",
+                FontSize = 11,
+                Foreground = Brushes.Gray,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            return;
+        }
+
+        foreach (var minutes in _settings.FrequentPomodoroMinutes)
+        {
+            var item = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(4, 2, 4, 2)
+            };
+            item.Children.Add(new TextBlock
+            {
+                Text = FormatMinutesLabel(minutes),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 4, 0)
+            });
+
+            var removeButton = new Button
+            {
+                Content = "x",
+                Tag = minutes,
+                Width = 20,
+                Height = 20,
+                FontSize = 10,
+                Foreground = Brushes.Gray,
+                Padding = new Thickness(0),
+                ToolTip = $"Remove {FormatMinutesLabel(minutes)}"
+            };
+            removeButton.Click += RemoveFrequentMinutes_Click;
+            item.Children.Add(removeButton);
+
+            FrequentTimesListPanel.Children.Add(item);
+        }
+    }
+
+    private bool TrySaveFrequentTimes()
+    {
+        try
+        {
+            SaveSettings(_settings);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            FrequentTimesError.Text = "Could not save setting.";
+            return false;
+        }
+    }
+
+    private static bool IsValidPomodoroMinutes(int minutes) => minutes is >= 1 and <= 999;
+
+    private static string FormatMinutesLabel(int minutes)
+    {
+        if (minutes < 60)
+            return $"{minutes}m";
+
+        if (minutes % 60 == 0)
+            return $"{minutes / 60}h";
+
+        return $"{minutes / 60}h {minutes % 60}m";
     }
 
     private void SaveBreakSeconds_Click(object sender, RoutedEventArgs e)
@@ -331,6 +505,7 @@ public partial class MainWindow : Window
     private sealed class AppSettings
     {
         public int BreakSeconds { get; set; } = DefaultBreakSeconds;
+        public List<int> FrequentPomodoroMinutes { get; set; } = [..DefaultFrequentPomodoroMinutes];
     }
 
     private enum TimerPhase
@@ -347,12 +522,29 @@ public partial class MainWindow : Window
                 return new AppSettings();
 
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsFilePath));
-            return settings?.BreakSeconds > 0 ? settings : new AppSettings();
+            return NormalizeSettings(settings);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             return new AppSettings();
         }
+    }
+
+    private static AppSettings NormalizeSettings(AppSettings? settings)
+    {
+        if (settings == null)
+            return new AppSettings();
+
+        if (settings.BreakSeconds <= 0)
+            settings.BreakSeconds = DefaultBreakSeconds;
+
+        var frequentPomodoroMinutes = settings.FrequentPomodoroMinutes ?? [..DefaultFrequentPomodoroMinutes];
+        settings.FrequentPomodoroMinutes = frequentPomodoroMinutes
+            .Where(IsValidPomodoroMinutes)
+            .Distinct()
+            .ToList();
+
+        return settings;
     }
 
     private static void SaveSettings(AppSettings settings)

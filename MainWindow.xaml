@@ -1,7 +1,7 @@
 <Window x:Class="WindowsPomodoro.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Pomodoro Timer" Height="330" Width="400"
+        Title="Pomodoro Timer" Height="395" Width="480"
         Icon="icon.ico"
         ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen">
     <Window.TaskbarItemInfo>
@@ -31,14 +31,47 @@
                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
         <!-- Control buttons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
+        <StackPanel Grid.Row="1" Orientation="Vertical"
                     HorizontalAlignment="Center" Margin="0,10,0,10">
-            <Button x:Name="StartPauseButton" Content="Start"
-                    Width="100" Height="36" Margin="5" FontSize="14"
-                    Click="StartPauseButton_Click"/>
-            <Button x:Name="ResetButton" Content="Reset"
-                    Width="100" Height="36" Margin="5" FontSize="14"
-                    Click="ResetButton_Click"/>
+            <WrapPanel HorizontalAlignment="Center">
+                <Button x:Name="StartPauseButton" Content="Start"
+                        Width="100" Height="36" Margin="5" FontSize="14"
+                        Click="StartPauseButton_Click"/>
+                <Button x:Name="ResetButton" Content="Reset"
+                        Width="100" Height="36" Margin="5" FontSize="14"
+                        Click="ResetButton_Click"/>
+                <StackPanel x:Name="FrequentTimesPanel" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="6,0,0,0"/>
+                <Button x:Name="ManageFrequentTimesButton" Content="+"
+                        Width="28" Height="28" Margin="4,5,5,5"
+                        FontSize="16" Foreground="Gray"
+                        ToolTip="Add or remove frequent times"
+                        Click="ManageFrequentTimesButton_Click"/>
+            </WrapPanel>
+
+            <Border x:Name="FrequentTimesEditor" Visibility="Collapsed"
+                    BorderBrush="#FFD0D0D0" BorderThickness="1"
+                    Padding="8" Margin="5,4,5,0">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="Frequent" FontSize="11" Foreground="Gray"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBox x:Name="FrequentMinutesBox" Width="44" Height="24"
+                                 FontSize="11" VerticalContentAlignment="Center"
+                                 Margin="0,0,4,0" MaxLength="3"/>
+                        <TextBlock Text="min" FontSize="11" Foreground="Gray"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <Button Content="Add" Height="24" FontSize="11"
+                                Foreground="Gray" Padding="8,0"
+                                Click="AddFrequentMinutes_Click"/>
+                    </StackPanel>
+                    <WrapPanel x:Name="FrequentTimesListPanel"
+                               HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    <TextBlock x:Name="FrequentTimesError" FontSize="10"
+                               Foreground="Firebrick" HorizontalAlignment="Center"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <!-- Bottom row -->

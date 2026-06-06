@@ -5,33 +5,14 @@ description: Publish and launch the Windows Pomodoro Release executable from the
 
 # Run Release
 
-Use this workflow from the Windows Pomodoro repository root, wherever the project is checked out.
+Use the bundled script for the deterministic release workflow. It stops any currently running published executable, publishes Release, verifies the published `.exe`, and launches it visibly.
 
-1. Stop any currently running instance of the published executable before publishing, so the existing `.exe` does not lock the output path:
-
-```powershell
-$exePath = Join-Path (Get-Location) 'bin\Release\net10.0-windows10.0.17763.0\win-x64\publish\WindowsPomodoro.exe'
-$exeName = [System.IO.Path]::GetFileNameWithoutExtension($exePath)
-$running = Get-Process -Name $exeName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exePath }
-if ($running) {
-    $running | Stop-Process -Force
-    $running | Wait-Process -Timeout 5
-}
-```
-
-2. Publish the Release executable from the repo root:
+From the Windows Pomodoro repository root, run:
 
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+& .\.codex\skills\run-release\scripts\run-release.ps1
 ```
 
-3. Launch the published executable visibly:
-
-```powershell
-$exePath = Join-Path (Get-Location) 'bin\Release\net10.0-windows10.0.17763.0\win-x64\publish\WindowsPomodoro.exe'
-Start-Process -FilePath $exePath
-```
-
-4. In the final response, state whether any existing process was stopped, whether publish succeeded, and whether the launch command completed without error.
+In the final response, summarize the script output: `StoppedProcessCount`, `PublishSucceeded`, `LaunchedProcessId`, and `ExecutablePath`.
 
 Use the repo root as the shell working directory. If sandboxing blocks either command, rerun it with escalation and a concise approval question.

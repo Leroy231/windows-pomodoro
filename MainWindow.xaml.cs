@@ -171,7 +171,7 @@ public partial class MainWindow : Window
                 Brushes.White,
                 1.0);
             formattedText.TextAlignment = TextAlignment.Center;
-            dc.DrawText(formattedText, new Point(size / 2.0, (size - formattedText.Height) / 2.0));
+            dc.DrawText(formattedText, new Point(size / 2.0, (size - formattedText.Height) / 2.0 - 4));
         }
         var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(drawingVisual);

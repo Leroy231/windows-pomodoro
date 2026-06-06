@@ -3,6 +3,7 @@ using System.IO;
 using System.Media;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -23,10 +24,22 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _timer;
     private readonly AppSettings _settings;
+    private readonly ImageSource _defaultIcon;
+    private readonly ImageSource _sittingIcon;
+    private readonly IntPtr _defaultSmallIconHandle;
+    private readonly IntPtr _defaultLargeIconHandle;
+    private readonly IntPtr _sittingSmallIconHandle;
+    private readonly IntPtr _sittingLargeIconHandle;
     private TimeSpan _timeRemaining;
+    private TimeSpan _currentPomodoroDuration = TimeSpan.FromMinutes(TimerMinutes);
     private bool _isRunning;
     private TimerPhase _phase = TimerPhase.Pomodoro;
+    private DeskMode _currentDeskMode = DeskMode.Sitting;
     private int _currentPomodoroMinutes = TimerMinutes;
+    private bool _hasStartedCurrentPomodoro;
+    private bool _sittingStartReminderShown;
+    private bool _sittingMidpointReminderShown;
+    private bool _isUpdatingDeskModeControls;
 
     private const string RegistryKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
     private const string RegistryValueName = "WindowsPomodoro";
@@ -34,6 +47,11 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "WindowsPomodoro");
     private static readonly string SettingsFilePath = Path.Combine(SettingsDirectory, "settings.json");
+    private static readonly JsonSerializerOptions SettingsJsonSerializerOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
     private static readonly Brush PomodoroBackground = Brushes.White;
     private static readonly Brush BreakBackground = new SolidColorBrush(Color.FromRgb(232, 245, 233));
 
@@ -41,7 +59,17 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _settings = LoadSettings();
+        _defaultIcon = Icon;
+        _sittingIcon = CreateEmojiIcon("🚲");
+        _defaultSmallIconHandle = CreateIconHandle(_defaultIcon, GetSystemMetric(SM_CXSMICON, 16));
+        _defaultLargeIconHandle = CreateIconHandle(_defaultIcon, GetSystemMetric(SM_CXICON, 32));
+        _sittingSmallIconHandle = CreateIconHandle(_sittingIcon, GetSystemMetric(SM_CXSMICON, 16));
+        _sittingLargeIconHandle = CreateIconHandle(_sittingIcon, GetSystemMetric(SM_CXICON, 32));
+        SourceInitialized += (_, _) => ApplyWindowAndTaskbarIcon();
+        Closed += (_, _) => DestroyIconHandles();
+        _currentDeskMode = _settings.NextDeskMode;
         BreakSecondsBox.Text = _settings.BreakSeconds.ToString(CultureInfo.InvariantCulture);
+        UpdateDeskModeControls();
         RenderFrequentTimes();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += Timer_Tick;
@@ -74,6 +102,83 @@ public partial class MainWindow : Window
         return bitmap;
     }
 
+    private static IntPtr CreateIconHandle(ImageSource imageSource, int size)
+    {
+        var bitmap = RenderIconBitmap(imageSource, size);
+        var stride = size * 4;
+        var pixels = new byte[stride * size];
+        bitmap.CopyPixels(pixels, stride, 0);
+
+        var colorBitmap = CreateBitmap(size, size, 1, 32, pixels);
+        var maskStride = ((size + 15) / 16) * 2;
+        var maskBitmap = CreateBitmap(size, size, 1, 1, new byte[maskStride * size]);
+
+        try
+        {
+            var iconInfo = new ICONINFO
+            {
+                fIcon = true,
+                hbmColor = colorBitmap,
+                hbmMask = maskBitmap
+            };
+            return CreateIconIndirect(ref iconInfo);
+        }
+        finally
+        {
+            if (colorBitmap != IntPtr.Zero)
+                DeleteObject(colorBitmap);
+
+            if (maskBitmap != IntPtr.Zero)
+                DeleteObject(maskBitmap);
+        }
+    }
+
+    private static BitmapSource RenderIconBitmap(ImageSource imageSource, int size)
+    {
+        var drawingVisual = new DrawingVisual();
+        using (var dc = drawingVisual.RenderOpen())
+        {
+            dc.DrawImage(imageSource, new Rect(0, 0, size, size));
+        }
+
+        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawingVisual);
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    private static int GetSystemMetric(int index, int fallback)
+    {
+        var value = GetSystemMetrics(index);
+        return value > 0 ? value : fallback;
+    }
+
+    private static ImageSource CreateEmojiIcon(string emoji)
+    {
+        const int size = 64;
+        var drawingVisual = new DrawingVisual();
+        using (var dc = drawingVisual.RenderOpen())
+        {
+            dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(20, 120, 80)), null, new Point(size / 2.0, size / 2.0), 30, 30);
+            dc.DrawEllipse(null, new Pen(Brushes.White, 3), new Point(size / 2.0, size / 2.0), 28, 28);
+
+            var formattedText = new FormattedText(
+                emoji,
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(new FontFamily("Segoe UI Emoji"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+                38,
+                Brushes.White,
+                1.0);
+            formattedText.TextAlignment = TextAlignment.Center;
+            dc.DrawText(formattedText, new Point(size / 2.0, (size - formattedText.Height) / 2.0));
+        }
+        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawingVisual);
+        bitmap.Freeze();
+        return bitmap;
+    }
+
     private void StartPauseThumbButton_Click(object? sender, EventArgs e) => TogglePlayPause();
     private void ResetThumbButton_Click(object? sender, EventArgs e) => DoReset();
 
@@ -88,11 +193,22 @@ public partial class MainWindow : Window
         }
         else
         {
-            _timer.Start();
-            _isRunning = true;
-            SetPauseButtonState();
+            StartCurrentTimer();
         }
         UpdateTaskbarOverlay();
+    }
+
+    private void StartCurrentTimer()
+    {
+        _timer.Start();
+        _isRunning = true;
+        SetPauseButtonState();
+
+        if (_phase == TimerPhase.Pomodoro && !_hasStartedCurrentPomodoro)
+        {
+            _hasStartedCurrentPomodoro = true;
+            MaybeShowSittingStartReminder();
+        }
     }
 
     private void DoReset()
@@ -119,6 +235,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        MaybeShowSittingMidpointReminder();
         UpdateDisplay();
     }
 
@@ -130,9 +247,14 @@ public partial class MainWindow : Window
         ShowToastNotification(completedPhase, _currentPomodoroMinutes);
 
         if (completedPhase == TimerPhase.Pomodoro)
+        {
+            AdvanceDeskModeAfterPomodoro();
             SetBreakReady();
+        }
         else
+        {
             SetPomodoroReady();
+        }
     }
 
     private static void ShowToastNotification(TimerPhase completedPhase, int completedPomodoroMinutes)
@@ -154,6 +276,25 @@ public partial class MainWindow : Window
         toast.Show();
     }
 
+    private static void ShowEllipticalReminderToast(bool isMidpoint)
+    {
+        var toast = new ToastContentBuilder();
+        if (isMidpoint)
+        {
+            toast
+                .AddText("Elliptical reminder")
+                .AddText("You're halfway through this sitting session. Time to pedal a bit.");
+        }
+        else
+        {
+            toast
+                .AddText("Sitting session started")
+                .AddText("Use your under-desk elliptical while you sit.");
+        }
+
+        toast.Show();
+    }
+
     private void ResetTimer()
     {
         SetPomodoroReady();
@@ -169,17 +310,17 @@ public partial class MainWindow : Window
         _timer.Stop();
         _isRunning = false;
         _currentPomodoroMinutes = minutes;
-        _timeRemaining = TimeSpan.FromMinutes(minutes);
+        _currentPomodoroDuration = TimeSpan.FromMinutes(minutes);
+        _timeRemaining = _currentPomodoroDuration;
         _phase = TimerPhase.Pomodoro;
+        ResetPomodoroReminderState();
         UpdateDisplay();
         SetStartButtonState();
 
         if (!startImmediately)
             return;
 
-        _timer.Start();
-        _isRunning = true;
-        SetPauseButtonState();
+        StartCurrentTimer();
         UpdateTaskbarOverlay();
     }
 
@@ -199,7 +340,8 @@ public partial class MainWindow : Window
         UpdateTaskbarOverlay();
     }
 
-    private string GetPhaseTitle() => _phase == TimerPhase.Break ? "Break" : "Pomodoro";
+    private string GetPhaseTitle() =>
+        _phase == TimerPhase.Break ? "Break" : $"Pomodoro ({_currentDeskMode})";
 
     private static string FormatTimeRemaining(TimeSpan time) =>
         time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"mm\:ss");
@@ -282,6 +424,142 @@ public partial class MainWindow : Window
             StopFlashTaskbar();
             SetPomodoroMinutes(minutes, true);
         }
+    }
+
+    private void DeskModeRadioButton_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingDeskModeControls)
+            return;
+
+        if (sender == SittingModeRadioButton)
+            SetDeskMode(DeskMode.Sitting);
+        else if (sender == StandingModeRadioButton)
+            SetDeskMode(DeskMode.Standing);
+    }
+
+    private void SetDeskMode(DeskMode deskMode)
+    {
+        if (_currentDeskMode == deskMode)
+            return;
+
+        _currentDeskMode = deskMode;
+        _settings.NextDeskMode = deskMode;
+        ResetPomodoroReminderState();
+        UpdateDeskModeControls();
+        UpdateDisplay();
+        TrySaveSettings();
+
+        if (_phase == TimerPhase.Pomodoro && _isRunning)
+        {
+            _hasStartedCurrentPomodoro = true;
+            MaybeShowSittingStartReminder();
+        }
+    }
+
+    private void AdvanceDeskModeAfterPomodoro()
+    {
+        _settings.LastCompletedDeskMode = _currentDeskMode;
+        _currentDeskMode = GetNextDeskMode(_currentDeskMode);
+        _settings.NextDeskMode = _currentDeskMode;
+        UpdateDeskModeControls();
+        TrySaveSettings();
+    }
+
+    private static DeskMode GetNextDeskMode(DeskMode deskMode) =>
+        deskMode == DeskMode.Sitting ? DeskMode.Standing : DeskMode.Sitting;
+
+    private void UpdateDeskModeControls()
+    {
+        _isUpdatingDeskModeControls = true;
+        SittingModeRadioButton.IsChecked = _currentDeskMode == DeskMode.Sitting;
+        StandingModeRadioButton.IsChecked = _currentDeskMode == DeskMode.Standing;
+        _isUpdatingDeskModeControls = false;
+        ApplyWindowAndTaskbarIcon();
+    }
+
+    private void ApplyWindowAndTaskbarIcon()
+    {
+        Icon = _currentDeskMode == DeskMode.Sitting ? _sittingIcon : _defaultIcon;
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        var smallIcon = _currentDeskMode == DeskMode.Sitting ? _sittingSmallIconHandle : _defaultSmallIconHandle;
+        var largeIcon = _currentDeskMode == DeskMode.Sitting ? _sittingLargeIconHandle : _defaultLargeIconHandle;
+
+        if (smallIcon != IntPtr.Zero)
+        {
+            SendMessage(hwnd, WM_SETICON, ICON_SMALL, smallIcon);
+            SendMessage(hwnd, WM_SETICON, ICON_SMALL2, smallIcon);
+            SetClassLongPtr(hwnd, GCLP_HICONSM, smallIcon);
+        }
+
+        if (largeIcon != IntPtr.Zero)
+        {
+            SendMessage(hwnd, WM_SETICON, ICON_BIG, largeIcon);
+            SetClassLongPtr(hwnd, GCLP_HICON, largeIcon);
+        }
+
+        RefreshTaskbarOverlay();
+    }
+
+    private void RefreshTaskbarOverlay()
+    {
+        if (TaskbarItemInfo == null)
+            return;
+
+        TaskbarItemInfo.Overlay = null;
+        UpdateTaskbarOverlay();
+    }
+
+    private void DestroyIconHandles()
+    {
+        DestroyIconHandle(_defaultSmallIconHandle);
+        DestroyIconHandle(_defaultLargeIconHandle);
+        DestroyIconHandle(_sittingSmallIconHandle);
+        DestroyIconHandle(_sittingLargeIconHandle);
+    }
+
+    private static void DestroyIconHandle(IntPtr iconHandle)
+    {
+        if (iconHandle != IntPtr.Zero)
+            DestroyIcon(iconHandle);
+    }
+
+    private void ResetPomodoroReminderState()
+    {
+        _hasStartedCurrentPomodoro = false;
+        _sittingStartReminderShown = false;
+        _sittingMidpointReminderShown = false;
+    }
+
+    private void MaybeShowSittingStartReminder()
+    {
+        if (_phase != TimerPhase.Pomodoro ||
+            _currentDeskMode != DeskMode.Sitting ||
+            _sittingStartReminderShown)
+        {
+            return;
+        }
+
+        _sittingStartReminderShown = true;
+        ShowEllipticalReminderToast(false);
+    }
+
+    private void MaybeShowSittingMidpointReminder()
+    {
+        if (_phase != TimerPhase.Pomodoro ||
+            _currentDeskMode != DeskMode.Sitting ||
+            !_hasStartedCurrentPomodoro ||
+            _sittingMidpointReminderShown ||
+            _timeRemaining > TimeSpan.FromTicks(_currentPomodoroDuration.Ticks / 2))
+        {
+            return;
+        }
+
+        _sittingMidpointReminderShown = true;
+        ShowEllipticalReminderToast(true);
     }
 
     private void ManageFrequentTimesButton_Click(object sender, RoutedEventArgs e)
@@ -461,7 +739,9 @@ public partial class MainWindow : Window
 
     private void DebugButton_Click(object sender, RoutedEventArgs e)
     {
+        _currentPomodoroDuration = TimeSpan.FromSeconds(5);
         _timeRemaining = TimeSpan.FromSeconds(5);
+        ResetPomodoroReminderState();
         UpdateDisplay();
         if (!_isRunning) TogglePlayPause();
     }
@@ -506,12 +786,20 @@ public partial class MainWindow : Window
     {
         public int BreakSeconds { get; set; } = DefaultBreakSeconds;
         public List<int> FrequentPomodoroMinutes { get; set; } = [..DefaultFrequentPomodoroMinutes];
+        public DeskMode? LastCompletedDeskMode { get; set; }
+        public DeskMode NextDeskMode { get; set; } = DeskMode.Sitting;
     }
 
     private enum TimerPhase
     {
         Pomodoro,
         Break
+    }
+
+    private enum DeskMode
+    {
+        Sitting,
+        Standing
     }
 
     private static AppSettings LoadSettings()
@@ -521,7 +809,9 @@ public partial class MainWindow : Window
             if (!File.Exists(SettingsFilePath))
                 return new AppSettings();
 
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsFilePath));
+            var settings = JsonSerializer.Deserialize<AppSettings>(
+                File.ReadAllText(SettingsFilePath),
+                SettingsJsonSerializerOptions);
             return NormalizeSettings(settings);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -544,16 +834,35 @@ public partial class MainWindow : Window
             .Distinct()
             .ToList();
 
+        if (settings.LastCompletedDeskMode.HasValue &&
+            !Enum.IsDefined(settings.LastCompletedDeskMode.Value))
+        {
+            settings.LastCompletedDeskMode = null;
+        }
+
+        if (!Enum.IsDefined(settings.NextDeskMode))
+            settings.NextDeskMode = DeskMode.Sitting;
+
         return settings;
+    }
+
+    private bool TrySaveSettings()
+    {
+        try
+        {
+            SaveSettings(_settings);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static void SaveSettings(AppSettings settings)
     {
         Directory.CreateDirectory(SettingsDirectory);
-        File.WriteAllText(SettingsFilePath, JsonSerializer.Serialize(settings, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        }));
+        File.WriteAllText(SettingsFilePath, JsonSerializer.Serialize(settings, SettingsJsonSerializerOptions));
     }
 
     #endregion
@@ -573,10 +882,52 @@ public partial class MainWindow : Window
     private const uint FLASHW_STOP = 0;
     private const uint FLASHW_ALL = 3;
     private const uint FLASHW_TIMERNOFG = 12;
+    private const int WM_SETICON = 0x0080;
+    private const int ICON_SMALL = 0;
+    private const int ICON_BIG = 1;
+    private const int ICON_SMALL2 = 2;
+    private const int SM_CXICON = 11;
+    private const int SM_CXSMICON = 49;
+    private const int GCLP_HICON = -14;
+    private const int GCLP_HICONSM = -34;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ICONINFO
+    {
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool fIcon;
+        public int xHotspot;
+        public int yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool FlashWindowEx(ref FLASHWINFO pwfi);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CreateIconIndirect(ref ICONINFO piconinfo);
+
+    [DllImport("user32.dll", EntryPoint = "SetClassLongPtrW")]
+    private static extern IntPtr SetClassLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateBitmap(int nWidth, int nHeight, uint nPlanes, uint nBitCount, byte[] lpBits);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr hObject);
 
     private void FlashTaskbar()
     {

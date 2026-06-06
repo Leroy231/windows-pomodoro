@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run Release"
+  short_description: "Publish and launch Windows Pomodoro release"
+  default_prompt: "Use $run-release to publish and launch the Windows Pomodoro release executable."
